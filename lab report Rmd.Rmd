@@ -1,0 +1,383 @@
+---
+title: "Lab Report-Chuwei Chen"
+author: "Chuwei Chen"
+date: "2022/3/21"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Set work directory
+```{r cars}
+setwd("D:/Master/Assignments/SIMP56/PARTB Workshop/PartB-social network analysis/Lab Report")
+```
+
+##*Part A - Klubbdata*
+First, import the dataset from csv.
+```{r}
+library(igraph)
+library(intergraph)
+library(readxl)
+# create a nodes list
+klubbdata_nodes = read.csv('klubbdata_nodes.csv')
+# create an edgelist
+klubbdata_edges = read.csv('klubbdata_edges.csv')
+klubb_net = graph_from_data_frame(d=klubbdata_edges, vertices = klubbdata_nodes, directed=FALSE)
+summary(klubb_net)
+```
+
+#*Q1. Is the network directed or undirected?*
+If we set the network as directed at the beginning and plot it, we can see that there is no mutual ties between nodes. Therefore, this is a undirected network.
+
+```{r}
+klubb_net_directed = graph_from_data_frame(d=klubbdata_edges, vertices = klubbdata_nodes, directed=TRUE)
+plot(klubb_net_directed,edge.arrow.size = .3, edge.width = .7)
+```
+
+#*Q2. How many actors and ties there are? *
+There are 34 actors and 78 ties in total.
+
+```{r}
+summary(klubb_net)
+```
+
+#*Q3. What is the density of the network?*
+The density of a network is the actual number of edges divided by the potential number of edges in the network. The density of this network is 0.14.
+```{r}
+klubb_density <- graph.density(klubb_net)
+klubb_density
+```
+
+#*Q4. What is the average degree of the network?*
+The average degree = (N-1)* density. Therefore, the average degree of the network is 4.59.
+```{r}
+(34-1)*klubb_density
+```
+
+#*Q5. What is the average shortest path of the network?*
+The average shortest path of the network is 2.41.
+```{r}
+average.path.length(klubb_net, directed = FALSE, unconnected = TRUE)
+#OR
+mean_distance(klubb_net)
+```
+
+#*Q6. Who are the 2 most central characters in this network?*
+```{r}
+library(intergraph)
+klubb_network <- asNetwork(klubb_net)
+library(igraph)
+library(network)
+df.prom2 <- data.frame(
+  degree = degree(klubb_net)/2,
+  closeness = closeness(klubb_net),
+  betweenness = betweenness(klubb_net)
+)
+library()
+row.names(df.prom2) <- klubb_network %v% "vertex.names"
+df.promsort <- df.prom2[order(-df.prom2$degree),]
+head(df.promsort)
+library(igraph)
+```
+
+First, we calculate the degree centrality, closeness centrality and betweeness centrality and order the nodes by degree. From the result we can see that, node 34 and node 1 has the highest degree centrality and betweeness centrality, which means they are the two most central characters is this network.
+
+#*Q7. Are there different communities in the network (use Louvain algorithm)? Describe and visualise the results. Report correlation with actual club membership.*
+```{r}
+comm_klubb <- cluster_louvain(klubb_net, weights=NULL)
+
+# The optimal modularity score
+modularity(comm_klubb)
+
+# The number of communities
+length(comm_klubb)
+
+# The size distribution by community
+sizes(comm_klubb)
+
+# Whether the community object is hierarchical
+is_hierarchical(comm_klubb)
+```
+There are 4 communities, the optimal modularity score is 0.42. The community object is not hierarchical.
+
+*Visualization of the communities*
+```{r}
+klubb_net_igraph.attr <- vertex.attributes(klubb_net)
+klubb_net_igraph_labels <- klubb_net_igraph.attr$vertex.names
+
+library(RColorBrewer)
+
+colors <- brewer.pal(length(comm_klubb), 'Accent')
+
+V(klubb_net)$color <- colors[membership(comm_klubb)] 
+set.seed(2)  
+plot(klubb_net, vertex.label=klubbdata_nodes$faction)
+
+```
+*Correlation between communities with actual club membership*
+```{r}
+klubb_net_igraph.comm <- comm_klubb$membership
+table(klubb_net_igraph.comm, klubbdata_nodes$faction)
+cor(klubb_net_igraph.comm, klubbdata_nodes$faction)  
+options(scipen=200)
+chisq.test(klubb_net_igraph.comm, klubbdata_nodes$faction)
+```
+The correlation coefficient(0.84)is close to 1, sowe can conclude that the variables are positively linearly related. Since p-value is lower than 0.05, we can conclude that the correlation is statistically significant. We should reject the null hypothesis and consider communities and club membership are correlated.
+
+#*Q8. Perform clustering based on edge betweenness (use cut-off to 2 clusters).How well do the clustering results match with the actual club membership? Report correlation and create a network visualisation that shows both to which cluster and club actors belong to.*
+```{r}
+klubb_betweeness <- cluster_edge_betweenness(klubb_net)
+
+klubb_2clusters <- cut_at(klubb_betweeness, no = 2)
+klubb_2clusters
+
+# dendrogram showing identified communities
+dendPlot(klubb_betweeness, mode="hclust")
+
+# dendrogram showing 2 communities
+dendPlot(klubb_betweeness, mode="hclust", rect = 2)
+```
+*Visualization*
+```{r}
+colors2 <- brewer.pal(5, 'Dark2')
+
+set.seed(2)
+plot(klubb_network,
+     main = "Clustering Network Visualisation",
+     gmode="graph",
+     usearrows = TRUE,
+     vertex.col = colors2[klubb_2clusters],
+     displaylabels = TRUE,
+     vertex.cex=2,
+     label.cex=0.5,)
+legend("bottomright", legend=c("cluster 1", "cluster 2"),
+       col=colors2, pch=19, pt.cex=1.5, bty = "o", cex=0.8,
+       title="cluster", text.font=4)
+```
+*Correlation*
+```{r}
+table(klubb_2clusters, klubbdata_nodes$faction)
+cor(klubb_2clusters, klubbdata_nodes$faction)
+options(scipen=200)
+chisq.test(klubb_2clusters, klubbdata_nodes$faction)
+```
+From the table we can see that the clustering results highly match with the actual club membership(except one case). The correlation coefficient -0.94 indicates that there is linear correlation between variables. The Chi-squared test reports the result is statistically significant because p value is lower than 0.05. Therefore we can conclude that the clustering algorithm matches well with the actual membership, and they are correlated.
+
+##*Part A - Starwars*
+First, load the starwars dataset.
+```{r}
+#Load star wars dataset
+install.packages("devtools", repos = "https://cran.r-project.org/web/packages/devtools/readme/README.html")
+library(devtools)
+devtools::install_github("pj398/movienetdata")
+library(movienetdata)
+data("starwars_tfa", "movienetdata")
+data(package = "movienetdata")
+force(starwars_tfa)
+
+library(network)
+library(sna)
+
+# Create network object from adjacency matrix
+starwars_net <- network(starwars_tfa$adjacency)
+```
+
+#*9. Is the network directed or undirected?*
+```{r}
+plot(starwars_net)
+#OR
+starwars_net
+```
+From the plot we can see that there are mutual ties. Or we can display the main attributes of the dataset and we can see that "directed = TRUE". Therefore this is a directed network.
+
+#*10. How many actors and ties there are?*
+```{r}
+starwars_net
+```
+From the attributes table above, we can see that there are 31 actors and 149 ties.
+
+#*11. What is the density of the network?*
+```{r}
+library(network)
+density_starwars <- network.density(starwars_net)
+density_starwars
+```
+The desity of the network is 0.16.
+
+#*12. What is the average degree of the network?*
+```{r}
+(31-1)*density_starwars
+```
+Because average degree = (N-1)*density, so we can calculate that the average degree of the network is 4.81.
+
+#*13. What is the average shortest path of the network?*
+```{r}
+library(intergraph)
+starwars_g <- asIgraph(starwars_net)
+average.path.length(starwars_g, directed = TRUE, unconnected = TRUE)
+#OR
+mean_distance(starwars_g)
+```
+The average shortest path of the network is 2.30.
+
+#*14. Who are the 3 most important characters in this movie?*
+```{r}
+df.prom_starwars <- data.frame(
+  degree = degree(starwars_net),
+  closeness = closeness(starwars_net),
+  betweenness = betweenness(starwars_net)
+)
+row.names(df.prom_starwars) <- starwars_net %v% "vertex.names"  # name rows with vertex names
+df.promsort_starwars <- df.prom_starwars[order(-df.prom_starwars$degree),]  # sort in decreasing degree order
+
+head(df.promsort_starwars)
+```
+First, we calculate the degree centrality, closeness centrality and betweeness centrality and order the nodes by degree. From the result we can see that, Poe Dameron and Han Solo has the highest degree centrality and betweeness centrality. Kylo Ren has a relatively low degree centrality but a high betweeness centrality, which means Kylo Ren is more likely to serve as the "bridge person"(or gatekeeper) in the network who can dissemination information more efficiently. Therefore, *Poe Dameron, Han Solo and Kylo Ren* are the three most important characters.
+
+#*15. Who does Rey interact with in the movie?*
+```{r}
+starwars_tfa$node_list
+rey_neigbour <- network::get.neighborhood(starwars_net, 7)
+rey_neigbour
+```
+According to the node list, Rey is number 7. Rey is interacting with nodes 3, 5, 14, 10, 6, which corresponds to *Kylo Ren, Finn, Unkar, Han Solo, and Maz Kanata*.
+
+#*16. Visualise the network so that node size depends on some centrality measure and node colour corresponds to the sex of the character.*
+```{r,fig.height=2.5,fig.width=2.5,dpi=150}
+node_gender <- as.factor(starwars_tfa$node_list$char_female)
+node_names <- starwars_tfa$node_list$char_name
+degree_f <- degree(starwars_net, cmode="outdegree")
+
+plot(starwars_g, vertex.size=degree_f,
+     vertex.label=node_names, arrow.size = 0.1,
+     vertex.color=node_gender,
+     label.cex = 1)
+legend("bottomright", legend=c("male", "female"),
+       col=c("deepskyblue", "orange"), pch=19, pt.cex=1.5, bty = "o", cex=0.8,
+       title="gender", text.font=4)
+```
+
+#*17. Briefly compare the two networks to other real-life networks (use the examples from the last slide in Lecture 2).*
+
+
+##*Part B*
+First build the social network.
+```{r}
+my_net <- graph.empty(directed = FALSE)
+my_net <- add_vertices(
+  my_net, 
+  16, 	
+  name=c("Chuwei", "May","Rong", "Victor", "Mhendo","Tunya", "Martin", "Henry","Joy", "Lyle","Dino","Vera","lwc","hsp","zyz","Rosalin")
+)
+
+my_net <- add_edges(
+  my_net, 
+  c("Chuwei","May", "Chuwei","Rong", "Chuwei","Victor", "Chuwei","Mhendo", "Chuwei","Tunya", "Chuwei","Martin", "Chuwei","Henry", "Chuwei","Joy", "Chuwei","Lyle", "Chuwei","Dino", "Chuwei","Vera", "Chuwei","hsp", "Chuwei","lwc", "Chuwei","zyz", "Chuwei","Rosalin", 
+    "May","Rong", "May","Victor", "May","Mhendo", "May","Tunya", "May","Henry", "May","Joy", "May","Dino", "May","Rosalin", 
+    "Rong","Victor", "Rong","Tunya", "Rong","Mhendo", "Rong","Dino", "Rong","lwc", 
+    "Victor","Mhendo", "Victor","Tunya", "Victor","Dino", 
+    "Mhendo", "Tunya", "Mhendo","Dino", 
+    "Henry", "Rosalin", 
+    "Joy","Lyle", "Joy","Vera", "Joy","lwc", "Joy","hsp", 
+    "Lyle","hsp", "Lyle","Vera", "Lyle","lwc", "Lyle","zyz", 
+    "hsp","lwc", "hsp","zyz", 
+    "lwc","zyz", 
+    "Dino","zyz")
+)
+summary(my_net)
+my_network <- asNetwork(my_net)
+```
+
+#*18. Compare your network to a random network and small world network of the same size (also set seed). Provide a brief description of network, including a table with the main descriptives and figures of degree distribution for all 3 networks.*
+First create a random network and small work network
+```{r}
+set.seed(4)
+random_net <- rgnm(1, 16, 46, mode="graph")
+
+set.seed(4)
+smallworld_net <- watts.strogatz.game(dim=1, size=16, nei=3, p=0.0)
+smallworld_net <- asNetwork(smallworld_net)
+```
+The degree distribution plots
+```{r}
+hist(degree(my_network)/2, breaks=15)
+hist(degree(random_net)/2, breaks= c(0:10))
+hist(degree(smallworld_net)/2, breaks= c(0:10))
+```
+```{r}
+#Calculate density, average degree and average shortest path
+my_den <- network.density(my_network)
+my_den
+(16-1)*my_den
+average.path.length(my_net)
+#0.38,5.75 and 1.62
+
+random_den <- 46/((16*15)/2)
+random_den
+(16-1)*random_den
+random_igraph <- graph.adjacency(random_net, mode="undirected", weighted=NULL)
+average.path.length(random_igraph)
+#0.38,5.75 and 1.71
+
+small_den <- network.density(smallworld_net)
+small_den
+(16-1)*small_den
+small_network_igraph <- asIgraph(smallworld_net)
+average.path.length(small_network_igraph)
+#0.4,6 and 1.8
+```
+
+
+#*19. Present a very basic visualisation of all 3 networks (just to capture the basic structure of connections).*
+```{r}
+plot(my_net)
+plot(network(random_net, directed=FALSE))
+plot(smallworld_net)
+```
+
+#*20. Create a list of top 5 members by 3 centrality measures for your network. In your network:a) Who you consider the key figure to contact for distributing information? Why? b) Who should get vaccinated first to avoid quick spreading of contagious disease? Why?*
+```{r}
+df.prom3 <- data.frame(
+  degree = degree(my_network)/2,
+  closeness = closeness(my_network),
+  betweenness = betweenness(my_network)
+)
+row.names(df.prom3) <- my_network %v% "vertex.names"
+
+df.promsort_degree <- df.prom3[order(-df.prom3$degree),]
+head(df.promsort_degree, n=5)
+
+df.promsort_closeness <- df.prom3[order(-df.prom3$closeness), ]
+head(df.promsort_closeness, n=5)
+
+df.promsort_bet <- df.prom3[order(-df.prom3$betweenness),]
+head(df.promsort_bet, n=5)
+
+```
+The betweenness centrality reflects the actors who play important roles in disseminating information. According to the ordering list, Chuwei has the largest betweeneess score, so Chuwei is the key figure to contact for distributing information.
+
+The degree centrality reflect actors who can quickly connect with the wider network. Considering contagious disease is transmitted from one person to another, the person who has the most degree should get vaccinated first to to prevent the spread of infection. In my network, Chuwei has the highest numbers of degrees, meaning she has the most connection so Chuwei should take vaccination.
+
+#*21. Create a visualisation of your social network (use labels, colours etc).*
+```{r}
+set.seed(3)
+gplot(my_network,
+      jitter = TRUE,
+     vertex.cex = degree(my_network)*0.2,
+     vertex.col = "skyblue",
+     vertex.border = "white",
+     displaylabels =TRUE,
+     label.col = "darkblue",
+     label.pos = 1,
+     label.cex = 1,
+     edge.col = "grey"
+     )
+```
+The network is built based on my social network, including my classmates, friends, and acquaintance. The node size is drawn based on the degree centrality of each actor. From the graph we can observe there are two clusters, representing my classmates and friends.
+
+
+
